@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safal Library OS - Unified Manager</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Poppins:wght@400;600;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        
+        /* Layout */
+        .sidebar { width: 250px; height: 100vh; position: fixed; top: 0; left: 0; background: white; border-right: 1px solid #e2e8f0; z-index: 100; overflow-y: auto; }
+        .main-content { margin-left: 250px; min-height: 100vh; padding-bottom: 50px; }
+        .nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 20px; text-align: left; color: #64748b; font-weight: 600; transition: 0.2s; border-left: 4px solid transparent; }
+        .nav-btn:hover { background-color: #f8fafc; color: #2563eb; }
+        .nav-btn.active { background-color: #eff6ff; color: #2563eb; border-left-color: #2563eb; font-weight: 800; }
+        .app-module { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .app-module.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); transition: 0.3s; }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0; }
+        }
+
+        /* Reused Component Styles */
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: inline-block; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .tab-btn.active { background-color: #2563eb; color: white; }
+        .tab-btn { background-color: #f1f5f9; color: #64748b; }
+        .seat-box { transition: all 0.2s ease; position: relative; }
+        .seat-box:hover { transform: scale(1.05); z-index: 10; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .seat-tooltip { visibility: hidden; opacity: 0; position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px; border-radius: 8px; width: max-content; max-width: 250px; font-size: 0.75rem; text-align: left; z-index: 100; transition: opacity 0.2s; pointer-events: none; }
+        .seat-tooltip::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1e293b transparent transparent transparent; }
+        .seat-box:hover .seat-tooltip { visibility: visible; opacity: 1; }
+
+        /* Ad Maker Specific */
+        .ad-canvas-wrapper { width: 100%; max-width: 500px; aspect-ratio: 1/1; margin: 0 auto; }
+        #adCanvas { width: 1000px; height: 1000px; transform-origin: top left; position: relative; background-color: #1e293b; background-size: cover; background-position: center; overflow: hidden; font-family: 'Poppins', sans-serif;}
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.5); }
+        .dark-glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); }
+
+        /* Warning & Receipt Specific */
+        .report-container { width: 400px; background: white; position: relative; overflow: hidden; border: 4px solid #ef4444; }
+        .receipt-container { width: 350px; background: white; position: relative; overflow: hidden; }
+        .dashed-line { border-bottom: 2px dashed #cbd5e1; }
+        .warning-stripes { background: repeating-linear-gradient(45deg, #ef4444, #ef4444 10px, #b91c1c 10px, #b91c1c 20px); height: 12px; width: 100%; }
+        .stamp { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-20deg); border: 4px solid #ef4444; color: #ef4444; font-size: 3rem; font-weight: 900; padding: 10px 20px; text-transform: uppercase; opacity: 0.15; pointer-events: none; border-radius: 10px; letter-spacing: 4px; }
+        .paid-stamp { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); border: 4px solid #22c55e; color: #22c55e; font-size: 3rem; font-weight: 900; padding: 10px 20px; text-transform: uppercase; opacity: 0.15; pointer-events: none; border-radius: 10px; }
+
+        /* Shared Search Dropdowns */
+        .search-dropdown { max-height: 200px; overflow-y: auto; position: absolute; width: 100%; z-index: 50; background: white; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .search-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s;}
+        .search-item:hover { background-color: #eff6ff; }
+        
+        /* Modals */
+        .wa-modal { animation: popIn 0.2s ease-out; }
+        @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="md:hidden bg-blue-600 text-white p-4 flex justify-between items-center sticky top-0 z-50 shadow-md">
+        <div class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-book-open"></i> Safal OS</div>
+        <button onclick="document.getElementById('sidebar').classList.toggle('open')" class="text-2xl"><i class="fa-solid fa-bars"></i></button>
+    </div>
+
+    <aside id="sidebar" class="sidebar shadow-xl md:shadow-none transition-transform duration-300">
+        <div class="p-6 flex items-center gap-3 border-b border-slate-100 hidden md:flex">
+            <div class="bg-blue-600 text-white w-10 h-10 flex items-center justify-center rounded-xl shadow-lg">
+                <i class="fa-solid fa-book-open"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-black text-slate-800 leading-tight">Safal OS</h1>
+                <p class="text-[10px] text-green-600 font-bold uppercase tracking-wider"><i class="fa-solid fa-circle text-[6px]"></i> Online</p>
+            </div>
+        </div>
+        <nav class="mt-6 flex flex-col gap-1">
+            <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Management</p>
+            <button onclick="switchGlobalModule('module-admin')" id="nav-module-admin" class="nav-btn active"><i class="fa-solid fa-users-gear w-5 text-center"></i> Enrollment & Admin</button>
+            <button onclick="switchGlobalModule('module-attendance')" id="nav-module-attendance" class="nav-btn"><i class="fa-solid fa-calendar-check w-5 text-center"></i> Attendance Log</button>
+            <button onclick="switchGlobalModule('module-seats')" id="nav-module-seats" class="nav-btn"><i class="fa-solid fa-couch w-5 text-center"></i> Live Seats</button>
+            <button onclick="switchGlobalModule('module-trials')" id="nav-module-trials" class="nav-btn"><i class="fa-solid fa-stopwatch w-5 text-center"></i> Trial Manager</button>
+            
+            <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Finance & Tools</p>
+            <button onclick="switchGlobalModule('module-receipt')" id="nav-module-receipt" class="nav-btn"><i class="fa-solid fa-file-invoice-dollar w-5 text-center"></i> Fee Receipt</button>
+            <button onclick="switchGlobalModule('module-warning')" id="nav-module-warning" class="nav-btn text-red-600 hover:text-red-700 hover:bg-red-50"><i class="fa-solid fa-triangle-exclamation w-5 text-center"></i> Incident Report</button>
+            <button onclick="switchGlobalModule('module-admaker')" id="nav-module-admaker" class="nav-btn text-purple-600 hover:text-purple-700 hover:bg-purple-50"><i class="fa-solid fa-wand-magic-sparkles w-5 text-center"></i> Ad Maker</button>
+        </nav>
+    </aside>
+
+    <div class="main-content">
+
+        <div id="module-admin" class="app-module active p-4 md:p-8">
+            <div id="admRegistrationView" class="max-w-md mx-auto py-2">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-black text-slate-800">New Enrollment</h2>
+                    <button type="button" onclick="toggleAdminTabs('list')" class="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold hover:bg-slate-200 transition"><i class="fa-solid fa-list mr-1"></i> View Students</button>
+                </div>
+        
+                <form id="admEnrollmentForm" class="space-y-4">
+                    <input type="hidden" id="admEditDocId" value=""> 
+                    <div class="bg-blue-50 p-5 rounded-2xl border border-blue-100">
+                        <h3 class="text-xs font-bold text-blue-600 uppercase mb-3"><i class="fa-solid fa-id-card mr-1"></i> Library Account</h3>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Reg No.</label>
+                                <input type="text" id="admRegNo" placeholder="e.g. SL-101" class="w-full p-3 rounded-lg border border-blue-200 text-blue-700 font-bold" required>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Date of Reg.</label>
+                                <input type="date" id="admRegDate" class="w-full p-3 rounded-lg border bg-white" required>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Set Password</label>
+                                <input type="text" id="admPassword" placeholder="Login password" class="w-full p-3 rounded-lg border bg-white">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Assign Seat No.</label>
+                                <select id="admSeatNo" class="w-full p-3 rounded-lg border bg-white font-bold text-blue-700">
+                                    <option value="">None</option>
+                                    </select>
+                            </div>
+                        </div>
+                    </div>
+        
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/60 space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">Student Name</label>
+                            <input type="text" id="admStudentName" placeholder="Full Name" class="w-full p-3 rounded-lg border bg-slate-50" required>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Father's Name</label>
+                                <input type="text" id="admFatherName" placeholder="Mr. Name" class="w-full p-3 rounded-lg border bg-slate-50">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Mother's Name</label>
+                                <input type="text" id="admMotherName" placeholder="Mrs. Name" class="w-full p-3 rounded-lg border bg-slate-50">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Aadhar No.</label>
+                                <input type="number" id="admAadharNo" placeholder="1234 5678..." class="w-full p-3 rounded-lg border bg-slate-50">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Gender</label>
+                                <select id="admGender" class="w-full p-3 rounded-lg border bg-slate-50">
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+        
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/60 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Mobile No.</label>
+                                <input type="tel" id="admMobileNo" placeholder="Student No." class="w-full p-3 rounded-lg border bg-slate-50" required>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500">Guardian No.</label>
+                                <input type="tel" id="admGuardianNo" placeholder="(Optional)" class="w-full p-3 rounded-lg border bg-slate-50">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500">Address</label>
+                            <textarea id="admAddress" rows="2" placeholder="Full Address" class="w-full p-3 rounded-lg border bg-slate-50"></textarea>
+                        </div>
+                    </div>
+        
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/60">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase mb-3">Shift & Fees</h3>
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="flex-1">
+                                <label class="text-xs font-bold text-slate-500">Start Time</label>
+                                <input type="time" id="admStartTime" class="w-full p-3 rounded-lg border bg-slate-50">
+                            </div>
+                            <span class="text-slate-400 mt-6">-</span>
+                            <div class="flex-1">
+                                <label class="text-xs font-bold text-slate-500">End Time</label>
+                                <input type="time" id="admEndTime" class="w-full p-3 rounded-lg border bg-slate-50">
+                            </div>
+                        </div>
+                        <div class="bg-red-50 p-3 rounded-xl border border-red-100">
+                            <label class="text-xs font-bold text-red-600 block mb-1">Next Fee Due Date</label>
+                            <input type="date" id="admFeeDueDate" class="w-full p-2 rounded border border-red-200 text-red-600 font-bold bg-white">
+                        </div>
+                    </div>
+        
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/60">
+                        <h3 class="text-xs font-bold text-orange-500 uppercase mb-3">Form Photo</h3>
+                        <input type="file" id="admCameraInput" accept="image/*" class="hidden" onchange="admHandleImageUpload(event)">
+                        <label for="admCameraInput" id="admUploadLabel" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition">
+                            <i class="fa-solid fa-camera text-slate-300 text-2xl mb-2"></i>
+                            <p class="text-xs text-slate-500">Tap to Capture</p>
+                        </label>
+                        <div id="admPreviewArea" class="hidden relative mt-2 rounded-xl overflow-hidden border border-slate-200 bg-black">
+                            <img id="admImagePreview" class="w-full h-48 object-contain" src="">
+                            <div class="absolute top-2 right-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-md" id="admFileSize">0 MB</div>
+                            <button type="button" onclick="admResetImage()" class="absolute top-2 left-2 bg-red-500 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <input type="hidden" id="admCompressedImageData">
+                    </div>
+        
+                    <div class="flex gap-2">
+                        <button type="button" onclick="clearAdminForm()" class="bg-slate-200 text-slate-600 font-bold py-4 px-4 rounded-xl hover:bg-slate-300 transition">Reset</button>
+                        <button type="submit" id="admSubmitBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 active:scale-95 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-check-circle"></i>
+                            <span id="admSubmitBtnText">Submit Reg.</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        
+            <div id="admListView" class="hidden max-w-md mx-auto py-2 space-y-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-black text-slate-800">Enrolled List</h2>
+                    <div class="flex gap-2">
+                        <button onclick="admOpenBroadcastModal()" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-lg shadow-green-200 animate-pulse">
+                            <i class="fa-solid fa-bullhorn mr-1"></i> Broadcast
+                        </button>
+                        <button onclick="toggleAdminTabs('form')" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-lg shadow-blue-200">
+                            <i class="fa-solid fa-plus mr-1"></i> Add
+                        </button>
+                    </div>
+                </div>
+        
+                <div class="relative mb-4">
+                    <i class="fa-solid fa-search absolute left-3 top-3.5 text-slate-400 text-sm"></i>
+                    <input type="text" id="admSearchInput" onkeyup="admFilterStudents()" placeholder="Search Name, Reg No, or Mobile..." class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 font-bold">
+                </div>
+        
+                <div id="admStudentListContainer" class="space-y-4">
+                    <div class="text-center py-10"><div class="loader"></div><p class="text-xs text-slate-400 mt-2">Loading Database...</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="module-attendance" class="app-module p-4 md:p-8">
+            <div class="max-w-2xl mx-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-black text-slate-800">Attendance Log</h2>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-200 rounded-xl mb-6">
+                    <button onclick="switchAttTab('daily')" id="attTabDaily" class="tab-btn active py-3 rounded-lg text-sm font-bold transition-all">
+                        <i class="fa-solid fa-calendar-day mr-1"></i> Daily
+                    </button>
+                    <button onclick="switchAttTab('report')" id="attTabReport" class="tab-btn py-3 rounded-lg text-sm font-bold transition-all">
+                        <i class="fa-solid fa-file-invoice mr-1"></i> Report
+                    </button>
+                </div>
+        
+                <div id="attViewDaily">
+                    <div class="flex gap-3 mb-6">
+                        <div class="flex-1 relative group">
+                            <i class="fa-solid fa-calendar absolute left-3 top-4 text-slate-400 text-sm"></i>
+                            <input type="date" id="attDateFilter" class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 shadow-sm focus:outline-none focus:border-blue-500 font-bold bg-white">
+                        </div>
+                        <button onclick="window.fetchAttendance()" class="bg-blue-600 px-6 py-3 rounded-xl shadow-lg text-white hover:bg-blue-700 active:scale-95 transition font-bold">
+                            <i class="fa-solid fa-rotate"></i> Load
+                        </button>
+                    </div>
+                    <div class="flex justify-between items-end mb-3 px-1 border-b border-slate-200 pb-2">
+                        <h2 class="text-xs font-bold text-slate-400 uppercase">Entries for Selected Date</h2>
+                        <span id="attTotalCount" class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">0 Present</span>
+                    </div>
+                    <div id="attList" class="space-y-3"></div>
+                </div>
+        
+                <div id="attViewReport" class="hidden">
+                    <div class="relative mb-6">
+                        <div class="relative">
+                            <i class="fa-solid fa-search absolute left-3 top-4 text-slate-400"></i>
+                            <input type="text" id="attSearchInput" placeholder="Search Student Name or Reg No..." 
+                                   class="w-full pl-10 pr-4 py-3 rounded-xl border border-blue-200 shadow-sm focus:border-blue-500 outline-none font-bold text-slate-700 bg-white">
+                        </div>
+                        <div id="attSearchResults" class="search-dropdown hidden"></div>
+                    </div>
+        
+                    <div id="attReportCard" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50">
+                            <div>
+                                <h2 id="attRepName" class="text-xl font-bold text-slate-800">Student Name</h2>
+                                <p id="attRepReg" class="text-xs font-bold text-blue-600 bg-blue-50 inline-block px-2 py-0.5 rounded mt-1">#---</p>
+                            </div>
+                            <button onclick="downloadReportPDF()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-lg flex items-center gap-2 hover:bg-black transition">
+                                <i class="fa-solid fa-download"></i> PDF
+                            </button>
+                        </div>
+                        
+                        <div class="p-5 grid grid-cols-2 gap-4">
+                            <div class="bg-green-50 p-3 rounded-xl border border-green-100">
+                                <p class="text-[10px] text-green-600 font-bold uppercase">Days Present</p>
+                                <p id="attRepCount" class="text-2xl font-black text-green-700">0</p>
+                            </div>
+                            <div class="bg-orange-50 p-3 rounded-xl border border-orange-100">
+                                <p class="text-[10px] text-orange-600 font-bold uppercase">Last Seen</p>
+                                <p id="attRepLastSeen" class="text-sm font-bold text-orange-700 mt-1">--</p>
+                            </div>
+                        </div>
+        
+                        <div class="bg-slate-50 px-5 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-y border-slate-100">Attendance Log</div>
+                        <div id="attRepList" class="max-h-[400px] overflow-y-auto"></div>
+                    </div>
+        
+                    <div id="attReportPlaceholder" class="text-center py-20 opacity-50">
+                        <i class="fa-solid fa-magnifying-glass text-4xl mb-3 text-slate-300"></i>
+                        <p class="text-sm font-bold text-slate-400">Search a student to view report</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="module-seats" class="app-module p-4 md:p-8">
+            <header class="max-w-4xl mx-auto mb-8 flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                <div class="flex items-center gap-4">
+                    <div class="bg-blue-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-lg">
+                        <i class="fa-solid fa-couch"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-black text-slate-800">Live Grid</h1>
+                        <p class="text-sm text-green-600 font-bold flex items-center gap-2">
+                            <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span> Real-time Sync Active
+                        </p>
+                    </div>
+                </div>
+                <div class="flex gap-6 text-xs font-bold text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div class="flex items-center gap-2"><div class="w-5 h-5 bg-white border border-slate-300 rounded"></div> Available</div>
+                    <div class="flex items-center gap-2"><div class="w-5 h-5 bg-green-100 border border-green-400 rounded text-green-700 flex items-center justify-center">1</div> Occupied</div>
+                </div>
+            </header>
+        
+            <main class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+                    <h2 class="text-center font-black text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-100 pb-4">Left Wing (1-18)</h2>
+                    <div id="seatGridLeft" class="grid grid-cols-3 gap-4"></div>
+                </div>
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+                    <h2 class="text-center font-black text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-100 pb-4">Right Wing (19-36)</h2>
+                    <div id="seatGridRight" class="grid grid-cols-3 gap-4"></div>
+                </div>
+            </main>
+        </div>
+
+        <div id="module-trials" class="app-module p-4 md:p-8">
+            <div class="max-w-md mx-auto">
+                <div class="bg-amber-500 p-6 rounded-3xl mb-6 flex justify-between items-center text-white shadow-lg shadow-amber-200">
+                    <div>
+                        <h1 class="font-black text-2xl flex items-center gap-2"><i class="fa-solid fa-stopwatch"></i> Trials</h1>
+                        <p class="text-xs font-bold opacity-80 uppercase tracking-wide">Manage Demo Students</p>
+                    </div>
+                    <button onclick="toggleTrialView('form')" class="bg-white text-amber-600 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-amber-50">
+                        <i class="fa-solid fa-plus mr-1"></i> New
+                    </button>
+                </div>
+        
+                <main id="trialFormView" class="hidden animate-fade-in bg-white p-6 rounded-3xl shadow-sm border border-amber-100 mb-6">
+                    <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                        <h2 class="font-black text-slate-700 text-lg" id="trialFormTitle">Add Trial Student</h2>
+                        <button onclick="toggleTrialView('list')" class="text-xs text-slate-400 font-bold hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+            
+                    <form id="trialForm" class="space-y-4">
+                        <input type="hidden" id="trialEditId">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-400">START DATE</label>
+                                <input type="date" id="trialStart" class="w-full p-3 border rounded-xl text-sm bg-slate-50 font-bold">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-red-400">TRIAL ENDS</label>
+                                <input type="date" id="trialEnd" class="w-full p-3 border border-red-200 rounded-xl text-sm text-red-600 font-bold bg-red-50">
+                            </div>
+                        </div>
+                        <input type="text" id="trialName" placeholder="Full Name" class="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold" required>
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="text" id="trialFather" placeholder="Father Name" class="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50">
+                            <input type="tel" id="trialMobile" placeholder="Mobile No" class="p-3 border border-slate-200 rounded-xl text-sm font-bold" required>
+                        </div>
+                        <textarea id="trialAddress" placeholder="Address" class="w-full p-3 border border-slate-200 rounded-xl text-sm bg-slate-50"></textarea>
+                        <div class="grid grid-cols-2 gap-3">
+                            <select id="trialGender" class="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50">
+                                <option>Male</option><option>Female</option>
+                            </select>
+                            <input type="text" id="trialTime" placeholder="Slot (e.g. 8-12)" class="p-3 border border-slate-200 rounded-xl text-sm bg-slate-50">
+                        </div>
+                        <button type="submit" id="trialSaveBtn" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-amber-200 transition mt-4">
+                            Start Trial Period
+                        </button>
+                    </form>
+                </main>
+        
+                <main id="trialListView" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-white p-4 rounded-2xl border border-green-100 shadow-sm text-center">
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active</p>
+                            <p class="text-3xl font-black text-green-600" id="trialActiveCount">0</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-red-100 shadow-sm text-center">
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Expired</p>
+                            <p class="text-3xl font-black text-red-500" id="trialExpiredCount">0</p>
+                        </div>
+                    </div>
+            
+                    <div class="relative">
+                        <i class="fa-solid fa-search absolute left-4 top-4 text-slate-400"></i>
+                        <input type="text" id="trialSearchInput" onkeyup="filterTrials()" placeholder="Search Name or Mobile..." class="w-full pl-12 pr-4 py-4 rounded-2xl border border-amber-200 bg-white outline-none focus:border-amber-500 transition shadow-sm font-bold">
+                    </div>
+            
+                    <div id="trialList" class="space-y-3 pb-10"></div>
+                </main>
+            </div>
+        </div>
+
+        <div id="module-receipt" class="app-module p-4 md:p-8">
+            <div class="bg-white w-full max-w-5xl mx-auto rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col md:flex-row">
+                
+                <div class="w-full md:w-1/2 p-6 md:p-8 bg-slate-50 border-r border-slate-100 relative">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="bg-slate-800 text-white w-12 h-12 flex items-center justify-center rounded-xl shadow-lg">
+                            <i class="fa-solid fa-file-invoice-dollar text-xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-black text-slate-800">Fee Receipt</h1>
+                            <p class="text-[10px] text-green-600 font-bold uppercase"><i class="fa-solid fa-circle text-[6px]"></i> Linked to DB</p>
+                        </div>
+                    </div>
+        
+                    <div class="relative mb-6">
+                        <i class="fa-solid fa-search absolute left-3 top-4 text-slate-400"></i>
+                        <input type="text" id="recSearch" placeholder="Search Student to Auto-fill..." class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 shadow-sm focus:border-blue-500 outline-none font-bold text-slate-700 bg-white">
+                        <div id="recSearchResults" class="search-dropdown hidden"></div>
+                    </div>
+        
+                    <form class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Receipt No.</label>
+                                <input type="text" id="recReceiptNo" class="w-full p-3 rounded-xl border border-slate-200 font-bold text-slate-400 bg-slate-100" readonly>
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Date of Issue</label>
+                                <input type="date" id="recDate" class="w-full p-3 rounded-xl border border-slate-200 font-bold text-slate-700 bg-white" onchange="updateRecPreview()">
+                            </div>
+                        </div>
+        
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase">Student Name</label>
+                            <input type="text" id="recName" placeholder="Student Name" class="w-full p-3 rounded-xl border border-slate-300 bg-white font-bold" oninput="updateRecPreview()">
+                        </div>
+        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Reg No.</label>
+                                <input type="text" id="recRegNo" placeholder="SL-..." class="w-full p-3 rounded-xl border border-slate-200 bg-white font-bold text-blue-600" oninput="updateRecPreview()">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Mobile No.</label>
+                                <input type="tel" id="recMobile" placeholder="987..." class="w-full p-3 rounded-xl border border-slate-200 bg-white font-bold">
+                            </div>
+                        </div>
+        
+                        <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 shadow-inner">
+                            <label class="text-[10px] font-bold text-blue-600 uppercase tracking-widest block mb-2">Amount Received (₹)</label>
+                            <input type="number" id="recAmount" placeholder="500" class="w-full p-4 rounded-xl border border-blue-300 font-black text-blue-800 text-2xl bg-white text-center" oninput="updateRecPreview()">
+                        </div>
+        
+                        <div class="grid grid-cols-2 gap-4 bg-slate-200 p-4 rounded-xl border border-slate-300">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-600 uppercase">Starting Date</label>
+                                <input type="date" id="recStartDate" class="w-full p-2 mt-1 rounded-lg border border-slate-300 bg-white text-sm font-bold" onchange="updateRecPreview()">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-600 uppercase">Last Date</label>
+                                <input type="date" id="recEndDate" class="w-full p-2 mt-1 rounded-lg border border-slate-300 bg-white text-sm font-bold text-red-600" onchange="updateRecPreview()">
+                            </div>
+                        </div>
+        
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase">Payment Mode</label>
+                            <select id="recMode" class="w-full p-3 rounded-xl border border-slate-200 bg-white font-bold text-slate-700" onchange="updateRecPreview()">
+                                <option value="Cash">Cash</option>
+                                <option value="UPI / Online">UPI / Online</option>
+                            </select>
+                        </div>
+        
+                        <div class="grid grid-cols-2 gap-3 mt-8 border-t border-slate-200 pt-6">
+                            <button type="button" onclick="downloadRecPDF()" class="bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-file-pdf"></i> Save PDF
+                            </button>
+                            <button type="button" onclick="shareRecWhatsApp()" class="bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 hover:bg-green-700 transition flex items-center justify-center gap-2">
+                                <i class="fa-brands fa-whatsapp text-xl"></i> Send to Student
+                            </button>
+                        </div>
+                    </form>
+                </div>
+        
+                <div class="w-full md:w-1/2 bg-slate-800 flex flex-col items-center justify-center p-8 relative">
+                    <p class="absolute top-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-900 px-3 py-1 rounded-full">Live Preview</p>
+                    
+                    <div id="receiptCanvas" class="receipt-container shadow-2xl rounded-sm p-6 transform scale-90 md:scale-100 origin-center">
+                        <div class="text-center border-b-2 border-slate-800 pb-4 mb-4">
+                            <div class="flex items-center justify-center gap-2 mb-1">
+                                <i class="fa-solid fa-book-open text-blue-600 text-xl"></i>
+                                <h2 class="text-2xl font-extrabold text-slate-800 uppercase tracking-tighter">Safal Library</h2>
+                            </div>
+                            <p class="text-[10px] text-slate-500 font-bold">Self-Study & Co-Working Space</p>
+                            <p class="text-[10px] text-slate-500">Near BSNL Office, Bansdih • +91 9305506411</p>
+                        </div>
+        
+                        <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-4">
+                            <p>Receipt No: <span id="prevRecId" class="text-slate-800">---</span></p>
+                            <p>Date: <span id="prevRecDate" class="text-slate-800">---</span></p>
+                        </div>
+        
+                        <div class="mb-4 space-y-1">
+                            <p class="text-[10px] text-slate-400 font-bold uppercase">Received with thanks from:</p>
+                            <p id="prevRecName" class="text-lg font-black text-slate-800 border-b border-dotted border-slate-400 pb-1">Student Name</p>
+                        </div>
+        
+                        <div class="flex justify-between mb-6">
+                            <div>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase">Reg No.</p>
+                                <p id="prevRecReg" class="font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs mt-1">---</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[10px] text-slate-400 font-bold uppercase">Payment Mode</p>
+                                <p id="prevRecMode" class="font-bold text-slate-800 mt-1 text-sm">Cash</p>
+                            </div>
+                        </div>
+        
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 text-center">
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mb-1">Paid for Period</p>
+                            <p id="prevRecPeriod" class="text-xs font-black text-slate-800">--- to ---</p>
+                        </div>
+        
+                        <div class="flex justify-between items-center mb-6 pt-3 border-t border-slate-200">
+                            <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">Total Received</p>
+                            <p class="text-3xl font-black text-slate-800">₹<span id="prevRecAmount">0</span></p>
+                        </div>
+        
+                        <div class="flex justify-between items-end mt-8 pt-4 dashed-line">
+                            <div class="text-[8px] text-slate-400 w-1/2 leading-tight">
+                                * Fees once paid is not refundable.<br>
+                                * Computer generated receipt.
+                            </div>
+                            <div class="text-center">
+                                <div class="h-8"></div>
+                                <p class="text-[10px] font-bold text-slate-800 border-t border-slate-300 px-4 pt-1">Authorized Signatory</p>
+                            </div>
+                        </div>
+        
+                        <div class="paid-stamp">PAID</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="module-admaker" class="app-module p-4 md:p-8">
+            <div class="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8">
+                <div class="w-full lg:w-1/3 bg-white p-6 rounded-3xl shadow-sm border border-slate-200 h-fit">
+                    <h2 class="text-2xl font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-purple-600"></i> Ad Studio</h2>
+        
+                    <div class="space-y-5">
+                        <div class="p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                            <label class="text-[10px] font-bold text-purple-600 uppercase mb-2 block tracking-widest">Background Image</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <input type="file" id="adBgInput" accept="image/*" class="hidden" onchange="updateAdBg(event)">
+                                    <label for="adBgInput" class="flex items-center justify-center w-full h-12 bg-white rounded-xl cursor-pointer hover:bg-slate-50 transition text-slate-600 font-bold text-xs shadow-sm border border-slate-200">
+                                        <i class="fa-solid fa-upload mr-2"></i> Upload
+                                    </label>
+                                </div>
+                                <button type="button" onclick="autoGenAdBg()" class="flex items-center justify-center w-full h-12 bg-purple-600 rounded-xl cursor-pointer hover:bg-purple-700 transition text-white font-bold text-xs shadow-md">
+                                    <i class="fa-solid fa-shuffle mr-2"></i> Random
+                                </button>
+                            </div>
+                        </div>
+        
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Main Headline</label>
+                            <input type="text" id="adHeadline" value="Focus. Study. Succeed." class="w-full p-3 rounded-xl border border-slate-300 font-bold" oninput="updateAdPreview()">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Highlight Badge</label>
+                            <input type="text" id="adBadge" value="3 DAYS FREE TRIAL!" class="w-full p-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 font-bold" oninput="updateAdPreview()">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Features (Comma separated)</label>
+                            <textarea id="adFeatures" rows="3" class="w-full p-3 rounded-xl border border-slate-300 text-sm font-medium" oninput="updateAdPreview()">AC, High-Speed Wi-Fi, Peaceful Environment, RO Water</textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Phone</label>
+                                <input type="text" id="adPhone" value="+91 9305506411" class="w-full p-3 rounded-xl border border-slate-300 font-bold" oninput="updateAdPreview()">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Price Label</label>
+                                <input type="text" id="adPrice" value="₹499/mo" class="w-full p-3 rounded-xl border border-green-300 bg-green-50 text-green-700 font-bold" oninput="updateAdPreview()">
+                            </div>
+                        </div>
+                        <button onclick="downloadAdImage()" class="w-full bg-slate-800 hover:bg-black text-white px-6 py-4 rounded-xl font-bold shadow-xl transition flex items-center justify-center gap-2 mt-4">
+                            <i class="fa-solid fa-download"></i> Export HD Image
+                        </button>
+                    </div>
+                </div>
+        
+                <div class="w-full lg:w-2/3 flex flex-col items-center justify-center bg-slate-200 rounded-3xl p-4 md:p-8 relative overflow-hidden border border-slate-300">
+                    <div class="ad-canvas-wrapper shadow-2xl rounded-sm overflow-hidden" id="adScaleWrapper">
+                        <div id="adCanvas">
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-slate-900/80 pointer-events-none"></div>
+                            
+                            <div class="absolute top-10 left-10 right-10 flex justify-between items-center z-10">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-4xl shadow-lg border-4 border-white/20">
+                                        <i class="fa-solid fa-book-open"></i>
+                                    </div>
+                                    <div class="text-white">
+                                        <h2 class="text-5xl font-black tracking-tight leading-none">SAFAL</h2>
+                                        <p class="text-2xl font-bold tracking-[0.2em] text-blue-300 uppercase">Library</p>
+                                    </div>
+                                </div>
+                                <div id="prevAdBadge" class="bg-amber-400 text-amber-900 px-6 py-3 rounded-full text-2xl font-black shadow-[0_0_30px_rgba(251,191,36,0.5)] transform rotate-3">
+                                    3 DAYS FREE TRIAL!
+                                </div>
+                            </div>
+        
+                            <div class="absolute top-1/3 left-10 right-10 z-10">
+                                <h1 id="prevAdHeadline" class="text-7xl font-black text-white leading-tight drop-shadow-2xl">
+                                    Focus. Study.<br><span class="text-blue-400">Succeed.</span>
+                                </h1>
+                            </div>
+        
+                            <div class="absolute bottom-[200px] left-10 z-10 glass-panel rounded-3xl p-8 max-w-[600px] shadow-2xl">
+                                <h3 class="text-xl font-black text-slate-800 uppercase mb-4 tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-star text-amber-400"></i> Why Choose Us?
+                                </h3>
+                                <ul id="prevAdFeatures" class="grid grid-cols-1 gap-4 text-2xl font-bold text-slate-700"></ul>
+                            </div>
+        
+                            <div class="absolute bottom-[240px] right-10 z-10 bg-green-500 text-white w-48 h-48 rounded-full flex flex-col items-center justify-center shadow-2xl transform -rotate-6 border-8 border-white/20">
+                                <span class="text-xl font-bold uppercase">Starting At</span>
+                                <span id="prevAdPrice" class="text-5xl font-black mt-1">₹499</span>
+                            </div>
+        
+                            <div class="absolute bottom-0 left-0 right-0 dark-glass h-[150px] flex items-center justify-between px-10 z-10 border-t border-white/10">
+                                <div class="flex items-center gap-4 text-white">
+                                    <div class="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-3xl"><i class="fa-brands fa-whatsapp"></i></div>
+                                    <div>
+                                        <p class="text-lg font-bold text-blue-200 uppercase">Call / WhatsApp</p>
+                                        <p id="prevAdPhone" class="text-4xl font-black tracking-wider">+91 9305506411</p>
+                                    </div>
+                                </div>
+                                <div class="text-right text-white">
+                                    <p class="text-lg font-bold text-slate-300 flex items-center justify-end gap-2"><i class="fa-solid fa-location-dot text-red-400"></i> Location</p>
+                                    <p class="text-2xl font-bold mt-1">Near BSNL Office, Bansdih</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="module-warning" class="app-module p-4 md:p-8">
+            <div class="bg-white w-full max-w-5xl mx-auto rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-red-100">
+                <div class="w-full md:w-1/2 p-6 md:p-8 bg-red-50 border-r border-red-100 relative">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="bg-red-600 text-white w-12 h-12 flex items-center justify-center rounded-xl shadow-lg shadow-red-300">
+                            <i class="fa-solid fa-gavel text-xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-black text-red-900">Issue Warning</h1>
+                            <p class="text-[10px] text-red-600 font-bold uppercase tracking-widest">Disciplinary Action</p>
+                        </div>
+                    </div>
+        
+                    <div class="relative mb-6">
+                        <i class="fa-solid fa-search absolute left-3 top-4 text-slate-400"></i>
+                        <input type="text" id="warnSearch" placeholder="Search Violator..." class="w-full pl-10 pr-4 py-3 rounded-xl border border-red-200 shadow-sm focus:border-red-500 outline-none font-bold text-slate-700 bg-white">
+                        <div id="warnSearchResults" class="search-dropdown hidden"></div>
+                    </div>
+        
+                    <form class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Student Name</label>
+                                <input type="text" id="warnName" class="w-full p-3 rounded-xl border border-slate-300 bg-white font-bold" oninput="updateWarnPreview()">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Reg No.</label>
+                                <input type="text" id="warnRegNo" class="w-full p-3 rounded-xl border border-slate-300 bg-white font-bold text-red-600" oninput="updateWarnPreview()">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase">Mobile No.</label>
+                            <input type="tel" id="warnMobile" class="w-full p-3 rounded-xl border border-slate-300 bg-white font-bold">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-red-600 uppercase">Violation Type</label>
+                            <select id="warnType" class="w-full p-3 rounded-xl border border-red-300 font-bold text-slate-800 bg-white shadow-inner" onchange="updateWarnPreview()">
+                                <option>Littering / Making Surroundings Dirty</option>
+                                <option>Creating Noise / Disturbance</option>
+                                <option>Misbehavior with Staff/Students</option>
+                                <option>Damage to Library Property</option>
+                                <option>Eating in Study Zone</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase">Incident Details</label>
+                            <textarea id="warnDesc" rows="2" class="w-full p-3 rounded-xl border border-slate-300 bg-white text-sm" oninput="updateWarnPreview()"></textarea>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Evidence Photo</label>
+                            <input type="file" id="warnUpload" accept="image/*" class="w-full text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-red-100 file:text-red-700 hover:file:bg-red-200 cursor-pointer border border-slate-200 rounded-xl p-1 bg-white" onchange="handleWarnImage(event)">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 mt-6 border-t border-red-200 pt-6">
+                            <button type="button" onclick="downloadWarnImage()" class="bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-download"></i> Save PNG
+                            </button>
+                            <button type="button" onclick="shareWarnWhatsApp()" class="bg-red-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-300 hover:bg-red-700 transition flex items-center justify-center gap-2">
+                                <i class="fa-brands fa-whatsapp text-xl"></i> Issue Warning
+                            </button>
+                        </div>
+                    </form>
+                </div>
+        
+                <div class="w-full md:w-1/2 bg-slate-800 flex flex-col items-center justify-center p-8 relative">
+                    <p class="absolute top-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-900 px-3 py-1 rounded-full">Live Document</p>
+                    
+                    <div id="reportCanvas" class="report-container shadow-2xl transform scale-90 md:scale-100 origin-center">
+                        <div class="warning-stripes"></div>
+                        <div class="text-center p-4 bg-red-600 text-white">
+                            <div class="flex justify-center items-center gap-2 mb-1">
+                                <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                                <h2 class="text-2xl font-black uppercase tracking-widest">Official Warning</h2>
+                            </div>
+                            <p class="text-[10px] font-bold tracking-widest opacity-80">SAFAL LIBRARY DISCIPLINARY COMMITTEE</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-4 pb-2 border-b border-slate-200">
+                                <p>Date: <span id="prevWarnDate" class="text-slate-800">---</span></p>
+                                <p>Report ID: <span id="prevWarnID" class="text-slate-800">---</span></p>
+                            </div>
+                            <div class="mb-4">
+                                <p class="text-[10px] text-slate-400 font-bold uppercase">Issued To:</p>
+                                <div class="flex justify-between items-end mt-1">
+                                    <p id="prevWarnName" class="text-xl font-black text-slate-800">Student Name</p>
+                                    <p class="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded">Reg: <span id="prevWarnReg" class="text-red-600">---</span></p>
+                                </div>
+                            </div>
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                                <p class="text-[10px] text-red-500 font-bold uppercase mb-1">Violation Type:</p>
+                                <p id="prevWarnType" class="text-sm font-bold text-red-700">---</p>
+                            </div>
+                            <div class="mb-4">
+                                <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">Incident Details:</p>
+                                <p id="prevWarnDesc" class="text-xs text-slate-700 leading-relaxed italic border-l-2 border-slate-300 pl-2">---</p>
+                            </div>
+                            <div class="mb-4">
+                                <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">Evidence / Photo Attached:</p>
+                                <div class="w-full h-32 bg-slate-100 border-2 border-dashed border-slate-300 rounded-lg overflow-hidden flex items-center justify-center relative">
+                                    <img id="prevWarnImg" src="" class="w-full h-full object-cover hidden">
+                                    <p id="warnNoImgTxt" class="text-xs text-slate-400 font-medium absolute">No Image Uploaded</p>
+                                </div>
+                            </div>
+                            <div class="bg-slate-800 text-white p-3 rounded-lg mt-6">
+                                <p class="text-[9px] font-bold text-red-400 uppercase mb-1"><i class="fa-solid fa-gavel mr-1"></i> Rule Policy</p>
+                                <p class="text-[8px] text-slate-300 leading-tight text-justify">
+                                    This serves as a formal warning. Maintaining discipline is mandatory. Repeated offenses will lead to immediate cancellation of membership. <b>Fees are non-refundable.</b>
+                                </p>
+                            </div>
+                            <div class="flex justify-between items-end mt-8">
+                                <div class="text-center w-1/3">
+                                    <div class="border-b border-slate-400 h-6 mb-1"></div>
+                                    <p class="text-[8px] font-bold text-slate-500 uppercase">Student Sign</p>
+                                </div>
+                                <div class="text-center w-1/3">
+                                    <div class="border-b border-slate-800 h-6 mb-1 text-xs font-signature text-slate-800">Admin</div>
+                                    <p class="text-[8px] font-bold text-slate-800 uppercase">Authorized Signatory</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="warning-stripes"></div>
+                        <div class="stamp">WARNING</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="waModal" class="fixed inset-0 bg-black/60 hidden z-[200] flex items-end sm:items-center justify-center p-4 backdrop-blur-sm" onclick="closeWaModal(event)">
+        <div class="bg-white w-full max-w-sm rounded-3xl p-6 wa-modal shadow-2xl" onclick="event.stopPropagation()">
+            <div class="text-center mb-6">
+                <div class="w-14 h-14 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-3xl shadow-inner">
+                    <i class="fa-brands fa-whatsapp"></i>
+                </div>
+                <h3 class="font-black text-xl text-slate-800">Send Message</h3>
+                <p class="text-xs font-bold text-slate-500 mt-1" id="waStudentName">To Student</p>
+            </div>
+            <div class="space-y-3">
+                <button onclick="sendWa('welcome')" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-700 shadow-lg shadow-green-200 transition">
+                    <i class="fa-solid fa-hand-sparkles"></i> Welcome & Login Details
+                </button>
+                <button onclick="sendWa('due')" class="w-full bg-orange-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-orange-600 shadow-lg shadow-orange-200 transition">
+                    <i class="fa-solid fa-bell"></i> Fee Due Reminder
+                </button>
+            </div>
+            <button onclick="closeWaModal(true)" class="w-full mt-6 py-3 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition">Cancel</button>
+        </div>
+    </div>
+
+    <div id="broadcastModal" class="fixed inset-0 bg-black/80 hidden z-[200] flex flex-col justify-end sm:justify-center p-4 backdrop-blur-md">
+        <div class="bg-white w-full max-w-md mx-auto rounded-t-3xl sm:rounded-3xl h-[85vh] flex flex-col wa-modal shadow-2xl overflow-hidden">
+            <div class="p-6 bg-blue-600 flex justify-between items-center text-white">
+                <div>
+                    <h3 class="font-black text-xl flex items-center gap-2"><i class="fa-solid fa-bullhorn"></i> Broadcast</h3>
+                    <p class="text-xs text-blue-200 font-bold tracking-widest uppercase mt-1">Send to all students</p>
+                </div>
+                <button onclick="document.getElementById('broadcastModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/40 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-5 bg-slate-50 border-b border-slate-200 shadow-inner">
+                <label class="text-xs font-bold text-slate-500 block mb-2 uppercase">Holiday / Closure Date</label>
+                <input type="date" id="broadcastDate" class="w-full p-3 rounded-xl border border-slate-300 text-sm font-bold text-slate-800 bg-white shadow-sm" onchange="updateBroadcastPreview()">
+            </div>
+            <div class="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-100" id="broadcastList"></div>
+            <div class="p-4 bg-white border-t border-slate-200 text-center">
+                <p class="text-[10px] font-bold text-slate-400 uppercase">Batched in 10s to prevent spam bans.</p>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="idCardCanvas" width="1000" height="600" class="hidden"></canvas>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, deleteDoc, updateDoc, orderBy, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        // ==========================================
+        // 1. FIREBASE CONFIG & GLOBAL DATA
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyAEU3K8FzwfZOsdTHSOTBzPoQ7wWc1jIhk",
+            authDomain: "safallibrary02-4e47b.firebaseapp.com",
+            projectId: "safallibrary02-4e47b",
+            storageBucket: "safallibrary02-4e47b.firebasestorage.app",
+            messagingSenderId: "718136047267",
+            appId: "1:718136047267:web:1ff63497bcb84d05323116"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Global state for sharing data across modules instantly
+        window.globalStudents = [];
+        window.globalTrials = [];
+
+        // Global Fetch & Sync (Real-time)
+        onSnapshot(collection(db, "students"), (snapshot) => {
+            window.globalStudents = [];
+            snapshot.forEach(docSnap => window.globalStudents.push({ id: docSnap.id, ...docSnap.data() }));
+            
+            // Auto-update dependent modules if data changes
+            renderAdminList(window.globalStudents);
+            renderLiveSeats(window.globalStudents);
+        });
+
+        onSnapshot(query(collection(db, "trials"), orderBy("endDate", "asc")), (snap) => {
+            window.globalTrials = [];
+            let active = 0, expired = 0;
+            const today = new Date().toISOString().split('T')[0];
+            snap.forEach(docSnap => {
+                const d = docSnap.data();
+                window.globalTrials.push({id: docSnap.id, ...d});
+                if(d.endDate < today) expired++; else active++;
+            });
+            document.getElementById('trialActiveCount').innerText = active;
+            document.getElementById('trialExpiredCount').innerText = expired;
+            renderTrialList(window.globalTrials);
+        });
+
+
+        // ==========================================
+        // 2. GLOBAL NAVIGATION LOGIC
+        // ==========================================
+        window.switchGlobalModule = function(moduleId) {
+            // Hide all modules
+            document.querySelectorAll('.app-module').forEach(el => el.classList.remove('active'));
+            // Remove active state from nav buttons
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            
+            // Show target module
+            document.getElementById(moduleId).classList.add('active');
+            document.getElementById('nav-' + moduleId)?.classList.add('active');
+            
+            // Close mobile sidebar
+            document.getElementById('sidebar').classList.remove('open');
+
+            // Module specific triggers on open
+            if(moduleId === 'module-attendance') fetchAttendanceLog();
+            if(moduleId === 'module-admaker') resizeAdCanvas();
+        }
+
+        // Setup Shared Seat Dropdown Options
+        const setupSeatDropdowns = () => {
+            const admSelect = document.getElementById('admSeatNo');
+            let opts = `<option value="">None</option>`;
+            for(let i=1; i<=36; i++) opts += `<option value="${i}">Seat ${i}</option>`;
+            admSelect.innerHTML = opts;
+        }
+        setupSeatDropdowns();
+
+        // Helper: Format 24h to 12h time
+        function formatTime(timeStr) {
+            if(!timeStr) return "--";
+            const [hour, min] = timeStr.split(':');
+            const h = parseInt(hour);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 || 12;
+            return `${h12}:${min} ${ampm}`;
+        }
+        function formatDateStr(dateStr) {
+            if(!dateStr) return "---";
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+
+        // ==========================================
+        // 3. ADMIN / ENROLLMENT MODULE LOGIC
+        // ==========================================
+        window.toggleAdminTabs = function(view) {
+            if(view === 'list') {
+                document.getElementById('admRegistrationView').classList.add('hidden');
+                document.getElementById('admListView').classList.remove('hidden');
+            } else {
+                document.getElementById('admListView').classList.add('hidden');
+                document.getElementById('admRegistrationView').classList.remove('hidden');
+            }
+        }
+
+        // Admin Image Upload
+        window.admHandleImageUpload = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    let width = img.width, height = img.height;
+                    const maxDim = 800; 
+                    if (width > height) { if (width > maxDim) { height *= maxDim / width; width = maxDim; } } 
+                    else { if (height > maxDim) { width *= maxDim / height; height = maxDim; } }
+                    canvas.width = width; canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    document.getElementById('admImagePreview').src = dataUrl;
+                    document.getElementById('admPreviewArea').classList.remove('hidden');
+                    document.getElementById('admUploadLabel').classList.add('hidden');
+                    document.getElementById('admCompressedImageData').value = dataUrl;
+                    document.getElementById('admFileSize').innerText = (dataUrl.length * 3 / 4 / (1024*1024)).toFixed(2) + " MB";
+                }
+                img.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+        window.admResetImage = function() {
+            document.getElementById('admPreviewArea').classList.add('hidden');
+            document.getElementById('admUploadLabel').classList.remove('hidden');
+            document.getElementById('admCompressedImageData').value = "";
+            document.getElementById('admCameraInput').value = "";
+        }
+
+        // Save Admin Form
+        document.getElementById('admEnrollmentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('admSubmitBtn');
+            const originalText = document.getElementById('admSubmitBtnText').innerText;
+            document.getElementById('admSubmitBtnText').innerText = "Saving to Cloud...";
+            btn.disabled = true;
+
+            try {
+                const studentData = {
+                    regNo: document.getElementById('admRegNo').value.toUpperCase(),
+                    password: document.getElementById('admPassword').value,
+                    seatNo: document.getElementById('admSeatNo').value,
+                    regDate: document.getElementById('admRegDate').value,
+                    name: document.getElementById('admStudentName').value,
+                    father: document.getElementById('admFatherName').value,
+                    mother: document.getElementById('admMotherName').value,
+                    aadhar: document.getElementById('admAadharNo').value,
+                    gender: document.getElementById('admGender').value,
+                    mobile: document.getElementById('admMobileNo').value,
+                    guardianMobile: document.getElementById('admGuardianNo').value,
+                    address: document.getElementById('admAddress').value,
+                    shiftStart: document.getElementById('admStartTime').value,
+                    shiftEnd: document.getElementById('admEndTime').value,
+                    feeDueDate: document.getElementById('admFeeDueDate').value,
+                    image: document.getElementById('admCompressedImageData').value,
+                    timestamp: new Date()
+                };
+
+                const editDocId = document.getElementById('admEditDocId').value;
+                if (editDocId) {
+                    await updateDoc(doc(db, "students", editDocId), studentData);
+                    alert('Updated Successfully!');
+                } else {
+                    await addDoc(collection(db, "students"), studentData);
+                    alert('Registered Successfully!');
+                }
+                clearAdminForm();
+                toggleAdminTabs('list');
+            } catch (error) { alert("Error: " + error.message); } 
+            finally { document.getElementById('admSubmitBtnText').innerText = originalText; btn.disabled = false; }
+        });
+
+        // Render Admin List
+        function renderAdminList(list) {
+            const container = document.getElementById('admStudentListContainer');
+            container.innerHTML = '';
+            if (list.length === 0) { container.innerHTML = `<div class="text-center text-slate-400 py-10">No students found.</div>`; return; }
+            
+            const sorted = [...list].sort((a, b) => b.timestamp - a.timestamp);
+            sorted.forEach((s) => {
+                const feeDate = new Date(s.feeDueDate);
+                const isOverdue = feeDate < new Date();
+                const feeClass = isOverdue ? 'text-red-500 font-bold' : 'text-green-600 font-bold';
+                const avatar = s.image ? `<img src="${s.image}" class="w-16 h-16 rounded-xl object-cover bg-slate-100 border">` : `<div class="w-16 h-16 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-black text-2xl shadow-inner">${s.name.charAt(0)}</div>`;
+                const seatBadge = s.seatNo ? `<span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded border border-blue-200 font-bold ml-2"><i class="fa-solid fa-chair mr-1"></i>S-${s.seatNo}</span>` : '';
+
+                container.innerHTML += `
+                    <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm relative hover:shadow-md transition">
+                        <div class="flex gap-4 mb-4">
+                            ${avatar}
+                            <div class="flex-1 min-w-0 pt-1">
+                                <div class="flex justify-between items-start flex-wrap gap-1">
+                                    <h3 class="font-black text-slate-800 text-lg truncate leading-tight">${s.name}</h3>
+                                    <div>
+                                        <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-bold">#${s.regNo || '---'}</span>
+                                        ${seatBadge}
+                                    </div>
+                                </div>
+                                <p class="text-xs font-bold text-slate-500 mt-1"><i class="fa-solid fa-phone text-[10px] mr-1 opacity-70"></i> ${s.mobile}</p>
+                                <div class="flex items-center gap-4 mt-2 text-[10px] text-slate-500">
+                                    <span><i class="fa-solid fa-clock mr-1 opacity-70"></i>${formatTime(s.shiftStart)}-${formatTime(s.shiftEnd)}</span>
+                                    <span class="${feeClass} bg-slate-50 px-2 py-0.5 rounded">Due: ${formatDateStr(s.feeDueDate)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 pt-3 border-t border-slate-100/80">
+                            <button onclick="admEditStudent('${s.id}')" class="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-blue-50 text-slate-400 hover:text-blue-600 text-[10px] font-bold transition"><i class="fa-solid fa-pen mb-1 text-sm"></i> Edit</button>
+                            <button onclick="admDeleteStudent('${s.id}')" class="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 text-[10px] font-bold transition"><i class="fa-solid fa-trash mb-1 text-sm"></i> Del</button>
+                            <button onclick="generateID('${s.id}')" class="flex flex-col items-center justify-center py-2 rounded-xl bg-purple-50 text-purple-600 hover:bg-purple-100 text-[10px] font-bold transition border border-purple-100"><i class="fa-solid fa-id-card mb-1 text-sm"></i> ID Card</button>
+                            <button onclick="openWaModal('${s.id}')" class="flex flex-col items-center justify-center py-2 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 text-[10px] font-bold transition border border-green-100"><i class="fa-brands fa-whatsapp mb-1 text-sm"></i> Chat</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        window.admFilterStudents = function() {
+            const term = document.getElementById('admSearchInput').value.toLowerCase();
+            const filtered = window.globalStudents.filter(s => s.name.toLowerCase().includes(term) || (s.regNo && s.regNo.toLowerCase().includes(term)) || s.mobile.includes(term));
+            renderAdminList(filtered);
+        }
+
+        window.clearAdminForm = function() {
+            document.getElementById('admEnrollmentForm').reset();
+            document.getElementById('admEditDocId').value = "";
+            document.getElementById('admSubmitBtnText').innerText = "Submit Registration";
+            admResetImage();
+            document.getElementById('admRegDate').valueAsDate = new Date();
+            const nm = new Date(); nm.setDate(nm.getDate() + 30);
+            document.getElementById('admFeeDueDate').value = nm.toISOString().split('T')[0];
+        }
+        
+        window.admEditStudent = function(id) {
+            const s = window.globalStudents.find(stu => stu.id === id);
+            if(!s) return;
+            document.getElementById('admEditDocId').value = id;
+            document.getElementById('admRegNo').value = s.regNo || '';
+            document.getElementById('admPassword').value = s.password || '';
+            document.getElementById('admSeatNo').value = s.seatNo || ''; 
+            document.getElementById('admRegDate').value = s.regDate;
+            document.getElementById('admStudentName').value = s.name;
+            document.getElementById('admFatherName').value = s.father;
+            document.getElementById('admMotherName').value = s.mother;
+            document.getElementById('admAadharNo').value = s.aadhar;
+            document.getElementById('admGender').value = s.gender;
+            document.getElementById('admMobileNo').value = s.mobile;
+            document.getElementById('admGuardianNo').value = s.guardianMobile;
+            document.getElementById('admAddress').value = s.address;
+            document.getElementById('admStartTime').value = s.shiftStart;
+            document.getElementById('admEndTime').value = s.shiftEnd;
+            document.getElementById('admFeeDueDate').value = s.feeDueDate;
+            if(s.image) {
+                document.getElementById('admImagePreview').src = s.image;
+                document.getElementById('admPreviewArea').classList.remove('hidden');
+                document.getElementById('admUploadLabel').classList.add('hidden');
+                document.getElementById('admCompressedImageData').value = s.image;
+            } else { admResetImage(); }
+            document.getElementById('admSubmitBtnText').innerText = "Update Record";
+            toggleAdminTabs('form');
+        }
+
+        window.admDeleteStudent = async function(id) {
+            if(confirm('Delete this student permanently?')) await deleteDoc(doc(db, "students", id));
+        }
+
+        // WhatsApp Modal Logic
+        let currentWaStudent = null;
+        window.openWaModal = function(id) {
+            const s = window.globalStudents.find(stu => stu.id === id);
+            if(!s) return;
+            currentWaStudent = s;
+            document.getElementById('waStudentName').innerText = `To: ${s.name} (${s.mobile})`;
+            document.getElementById('waModal').classList.remove('hidden');
+        }
+        window.closeWaModal = function(isBtn) {
+            if(isBtn || event.target.id === 'waModal') document.getElementById('waModal').classList.add('hidden');
+        }
+        window.sendWa = function(type) {
+            if(!currentWaStudent) return;
+            const s = currentWaStudent;
+            const link = "https://safallibrary01.github.io/safallibrary/";
+            let msg = type === 'welcome' 
+                ? `*Welcome to Safal Library!* 📚%0A%0AHello ${s.name},%0AThank you for registering.%0A%0A*Your Login Details:*%0A👤 Reg No: ${s.regNo}%0A🔑 Password: ${s.password}%0A%0A🔗 *Login Here:* ${link}`
+                : `*Fee Reminder - Safal Library* 🔔%0A%0AHello ${s.name},%0AThis is a reminder that your library fee is due on *${formatDateStr(s.feeDueDate)}*.%0A%0APlease pay to continue your sessions.%0A%0A*Your Login:*%0A👤 Reg No: ${s.regNo}%0A🔑 Pass: ${s.password}%0A🔗 ${link}`;
+            window.open(`https://wa.me/91${s.mobile}?text=${msg}`, '_blank');
+            closeWaModal(true);
+        }
+
+        // Broadcast Logic
+        window.admOpenBroadcastModal = function() {
+            document.getElementById('broadcastModal').classList.remove('hidden');
+            document.getElementById('broadcastDate').valueAsDate = new Date();
+            updateBroadcastPreview(); 
+        }
+        window.updateBroadcastPreview = function() {
+            const dateVal = document.getElementById('broadcastDate').value;
+            const formattedDate = new Date(dateVal).toLocaleDateString('en-GB');
+            const list = document.getElementById('broadcastList');
+            list.innerHTML = "";
+            if (window.globalStudents.length === 0) { list.innerHTML = "<p class='text-center text-slate-400 font-bold py-10'>No students to message.</p>"; return; }
+
+            const batchSize = 10;
+            for (let i = 0; i < window.globalStudents.length; i += batchSize) {
+                const batch = window.globalStudents.slice(i, i + batchSize);
+                const batchContainer = document.createElement('div');
+                batchContainer.className = "bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm";
+                batchContainer.innerHTML = `<div class="bg-slate-100 px-4 py-2 font-black text-xs text-slate-600 flex justify-between border-b border-slate-200"><span>Batch ${(i/batchSize)+1}</span> <span class="bg-white px-2 rounded border border-slate-200">${batch.length} Students</span></div>`;
+                
+                batch.forEach(s => {
+                    const row = document.createElement('div');
+                    row.className = "flex justify-between items-center p-3 border-b border-slate-50 last:border-0";
+                    const msg = `*NOTICE: Library Closed* 🛑%0A%0ADate: ${formattedDate}%0A%0ADear ${s.name},%0AThe library will remain closed on the above date.%0A%0AWe apologize for the inconvenience caused.`;
+                    row.innerHTML = `
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black text-xs">${s.name.charAt(0)}</div>
+                            <span class="text-xs font-bold text-slate-700 truncate">${s.name}</span>
+                        </div>
+                        <a href="https://wa.me/91${s.mobile}?text=${msg}" target="_blank" class="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-blue-600 hover:text-white transition border border-blue-100">Send</a>
+                    `;
+                    batchContainer.appendChild(row);
+                });
+                list.appendChild(batchContainer);
+            }
+        }
+
+        // ID Card Generator
+        window.generateID = function(id) {
+            const s = window.globalStudents.find(stu => stu.id === id);
+            if(!s) return;
+            const btn = event.currentTarget; const originalText = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`; btn.disabled = true;
+
+            const canvas = document.getElementById('idCardCanvas'); const ctx = canvas.getContext('2d');
+            ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 1000, 600);
+            ctx.fillStyle = "#2563eb"; ctx.fillRect(0, 0, 1000, 120);
+            ctx.fillStyle = "#ffffff"; ctx.font = "bold 50px Inter"; ctx.textAlign = "center"; ctx.fillText("SAFAL LIBRARY", 500, 80);
+            ctx.lineWidth = 5; ctx.strokeStyle = "#2563eb"; ctx.strokeRect(50, 150, 250, 300);
+            ctx.fillStyle = "#1e293b"; ctx.textAlign = "left";
+            
+            let fontSize = 40; ctx.font = `bold ${fontSize}px Inter`;
+            while (ctx.measureText(s.name.toUpperCase()).width > 550) { fontSize -= 2; ctx.font = `bold ${fontSize}px Inter`; }
+            ctx.fillText(s.name.toUpperCase(), 350, 200);
+
+            ctx.font = "bold 28px Inter"; ctx.fillStyle = "#64748b"; 
+            const startY = 280, gap = 55;
+            ctx.fillText(`Reg No:`, 350, startY); ctx.fillStyle = "#000000"; ctx.fillText(`${s.regNo}`, 500, startY);
+            ctx.fillStyle = "#64748b"; ctx.fillText(`Mobile:`, 350, startY + gap); ctx.fillStyle = "#000000"; ctx.fillText(`${s.mobile}`, 500, startY + gap);
+            ctx.fillStyle = "#64748b"; ctx.fillText(`Address:`, 350, startY + gap*2); ctx.fillStyle = "#000000"; 
+            let addr = s.address || ""; if(addr.length > 25) addr = addr.substring(0, 25) + "...";
+            ctx.fillText(`${addr}`, 500, startY + gap*2);
+            ctx.fillStyle = "#64748b"; ctx.fillText(`Valid Thru:`, 350, startY + gap*3); ctx.fillStyle = "#dc2626"; ctx.fillText(`${formatDateStr(s.feeDueDate)}`, 500, startY + gap*3);
+            ctx.fillStyle = "#f1f5f9"; ctx.fillRect(0, 520, 1000, 80);
+            ctx.fillStyle = "#2563eb"; ctx.font = "bold 25px Inter"; ctx.textAlign = "center"; ctx.fillText("Note: Please carry this card daily.", 500, 570);
+
+            const img = new Image(); img.crossOrigin = "anonymous";
+            img.src = s.image || "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="; 
+            img.onload = function() { ctx.drawImage(img, 50, 150, 250, 300); triggerDownload(); };
+            img.onerror = function() { ctx.fillStyle = "#cccccc"; ctx.fillRect(50, 150, 250, 300); triggerDownload(); }
+
+            function triggerDownload() {
+                try {
+                    const link = document.createElement('a'); link.download = `ID_${s.regNo}.png`;
+                    link.href = canvas.toDataURL("image/png"); link.click();
+                } catch(e) { alert("Download Blocked. Please allow downloads."); }
+                btn.innerHTML = originalText; btn.disabled = false;
+            }
+        }
+
+
+        // ==========================================
+        // 4. ATTENDANCE MODULE LOGIC
+        // ==========================================
+        window.switchAttTab = function(tab) {
+            document.getElementById('attTabDaily').classList.remove('active');
+            document.getElementById('attTabReport').classList.remove('active');
+            document.getElementById('attViewDaily').classList.add('hidden');
+            document.getElementById('attViewReport').classList.add('hidden');
+            if(tab === 'daily') {
+                document.getElementById('attTabDaily').classList.add('active');
+                document.getElementById('attViewDaily').classList.remove('hidden');
+            } else {
+                document.getElementById('attTabReport').classList.add('active');
+                document.getElementById('attViewReport').classList.remove('hidden');
+            }
+        }
+
+        window.fetchAttendanceLog = async function() {
+            const container = document.getElementById('attList');
+            const dInput = document.getElementById('attDateFilter').value;
+            if(!dInput) return;
+            const [y, m, d] = dInput.split('-').map(Number);
+            const startOfDay = new Date(y, m - 1, d, 0, 0, 0);
+            const endOfDay = new Date(y, m - 1, d, 23, 59, 59);
+
+            container.innerHTML = `<div class="text-center py-10"><div class="loader"></div></div>`;
+            try {
+                const q = query(collection(db, "attendance"), where("timestamp", ">=", startOfDay), where("timestamp", "<=", endOfDay), orderBy("timestamp", "desc"));
+                const snap = await getDocs(q);
+                container.innerHTML = "";
+                document.getElementById('attTotalCount').innerText = `${snap.size} Present`;
+                if (snap.empty) { container.innerHTML = `<div class="text-center py-10 border-2 border-dashed rounded-2xl border-slate-200 text-slate-400 text-sm font-bold bg-slate-50">No records found</div>`; return; }
+                
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    const time = data.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    container.innerHTML += `
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:border-blue-200 transition">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 font-black text-xl shadow-inner">${data.name.charAt(0)}</div>
+                                <div>
+                                    <h3 class="font-black text-slate-800 text-sm">${data.name}</h3>
+                                    <span class="text-[10px] bg-slate-100 border border-slate-200 text-slate-500 px-2 py-0.5 rounded font-bold tracking-widest">#${data.regNo}</span>
+                                </div>
+                            </div>
+                            <span class="text-xs font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">${time}</span>
+                        </div>
+                    `;
+                });
+            } catch (e) { console.error(e); }
+        };
+
+        // Report Search Logic
+        const attSearchInp = document.getElementById('attSearchInput');
+        const attResBox = document.getElementById('attSearchResults');
+        let currentAttReportData = { name: "", regNo: "", history: [] };
+
+        attSearchInp.addEventListener('keyup', (e) => {
+            const term = e.target.value.toLowerCase();
+            attResBox.innerHTML = '';
+            if (term.length < 1) { attResBox.classList.add('hidden'); return; }
+            
+            // Reusing globalStudents!
+            const filtered = window.globalStudents.filter(s => (s.name && s.name.toLowerCase().includes(term)) || (s.regNo && s.regNo.toLowerCase().includes(term)));
+            if (filtered.length > 0) {
+                attResBox.classList.remove('hidden');
+                filtered.slice(0, 5).forEach(s => {
+                    const div = document.createElement('div'); div.className = 'search-item flex justify-between items-center';
+                    div.innerHTML = `<span class="font-bold text-sm text-slate-700">${s.name}</span><span class="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded border border-blue-100">#${s.regNo}</span>`;
+                    div.onclick = () => generateAttReport(s);
+                    attResBox.appendChild(div);
+                });
+            } else { attResBox.classList.add('hidden'); }
+        });
+
+        async function generateAttReport(student) {
+            attSearchInp.value = ""; attResBox.classList.add('hidden');
+            document.getElementById('attReportPlaceholder').classList.add('hidden');
+            document.getElementById('attReportCard').classList.remove('hidden');
+            document.getElementById('attRepName').innerText = student.name;
+            document.getElementById('attRepReg').innerText = "#" + student.regNo;
+            document.getElementById('attRepList').innerHTML = `<div class="text-center py-10 text-slate-400"><div class="loader"></div></div>`;
+
+            try {
+                const q = query(collection(db, "attendance"), where("regNo", "==", student.regNo));
+                const snap = await getDocs(q);
+                const history = []; snap.forEach(doc => history.push(doc.data().timestamp.toDate()));
+                history.sort((a, b) => b - a);
+
+                document.getElementById('attRepCount').innerText = history.length;
+                document.getElementById('attRepLastSeen').innerText = history.length > 0 ? history[0].toLocaleDateString('en-GB') : "Never";
+                
+                const listContainer = document.getElementById('attRepList');
+                listContainer.innerHTML = "";
+                if(history.length === 0) listContainer.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs font-bold">No records found.</div>`;
+                
+                history.forEach(date => {
+                    listContainer.innerHTML += `
+                        <div class="flex justify-between items-center px-5 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-regular fa-calendar-check text-blue-400 text-sm"></i>
+                                <span class="text-sm font-bold text-slate-700">${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                            </div>
+                            <span class="text-xs font-black text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-lg shadow-sm">${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                    `;
+                });
+                currentAttReportData = { name: student.name, regNo: student.regNo, history: history };
+            } catch(e) { console.error(e); }
+        }
+
+        window.downloadReportPDF = function() {
+            if(!currentAttReportData.history.length) { alert("No data to download"); return; }
+            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            doc.setFillColor(37, 99, 235); doc.rect(0, 0, 210, 30, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont("helvetica", "bold");
+            doc.text("Safal Library - Attendance Report", 105, 18, { align: "center" });
+            doc.setTextColor(0, 0, 0); doc.setFontSize(12);
+            doc.text(`Student Name: ${currentAttReportData.name}`, 14, 45);
+            doc.text(`Reg No: ${currentAttReportData.regNo}`, 14, 52);
+            doc.text(`Total Days Present: ${currentAttReportData.history.length}`, 14, 59);
+            doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.text(`Report Generated: ${new Date().toLocaleDateString()}`, 150, 45);
+            const tableData = currentAttReportData.history.map((date, index) => [
+                index + 1, date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+                date.toLocaleDateString('en-US', { weekday: 'long' }), date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            ]);
+            doc.autoTable({ startY: 65, head: [['#', 'Date', 'Day', 'Entry Time']], body: tableData, theme: 'striped', headStyles: { fillColor: [37, 99, 235] } });
+            doc.save(`Attendance_${currentAttReportData.name}.pdf`);
+        }
+
+
+        // ==========================================
+        // 5. LIVE SEATS MODULE LOGIC
+        // ==========================================
+        function renderLiveSeats(students) {
+            const leftContainer = document.getElementById('seatGridLeft');
+            const rightContainer = document.getElementById('seatGridRight');
+            leftContainer.innerHTML = ''; rightContainer.innerHTML = '';
+            const seatMap = {};
+            students.forEach(s => { if(s.seatNo) { if(!seatMap[s.seatNo]) seatMap[s.seatNo] = []; seatMap[s.seatNo].push(s); } });
+
+            for (let i = 1; i <= 36; i++) {
+                const num = i.toString(); const occupants = seatMap[num] || []; const isBooked = occupants.length > 0;
+                const seatDiv = document.createElement('div');
+                let colorClass = isBooked ? "bg-green-50 border-green-400 text-green-700 shadow-inner" : "bg-white border-slate-200 text-slate-400 hover:border-blue-300";
+                seatDiv.className = `seat-box h-20 rounded-2xl border-2 flex flex-col items-center justify-center cursor-default ${colorClass}`;
+                seatDiv.innerHTML = `<span class="text-2xl font-black">${i}</span>${isBooked ? `<span class="text-[9px] font-black bg-green-200 text-green-800 px-2 py-0.5 mt-1 rounded-full border border-green-300">${occupants.length} User(s)</span>` : ''}`;
+                
+                const tooltip = document.createElement('div'); tooltip.className = "seat-tooltip";
+                if (isBooked) {
+                    let content = `<div class="font-black border-b border-slate-600 pb-2 mb-2 text-yellow-400 uppercase tracking-widest text-[10px]">Seat ${i} Allocation</div>`;
+                    occupants.forEach(occ => {
+                        content += `<div class="mb-2 last:mb-0"><p class="font-bold text-white text-sm">${occ.name}</p><p class="text-[10px] font-bold text-slate-400 flex items-center gap-1"><i class="fa-regular fa-clock"></i> ${formatTime(occ.shiftStart)} - ${formatTime(occ.shiftEnd)}</p></div>`;
+                    });
+                    tooltip.innerHTML = content;
+                } else { tooltip.innerHTML = `<span class="text-green-400 font-bold uppercase tracking-widest text-[10px]">Seat Available</span><br><span class="text-slate-300 font-medium">Assign via Admin panel</span>`; }
+                seatDiv.appendChild(tooltip);
+                if (i <= 18) leftContainer.appendChild(seatDiv); else rightContainer.appendChild(seatDiv);
+            }
+        }
+
+
+        // ==========================================
+        // 6. TRIAL MANAGER MODULE LOGIC
+        // ==========================================
+        window.toggleTrialView = (view) => {
+            if(view === 'form') { document.getElementById('trialListView').classList.add('hidden'); document.getElementById('trialFormView').classList.remove('hidden'); } 
+            else { document.getElementById('trialFormView').classList.add('hidden'); document.getElementById('trialListView').classList.remove('hidden'); clearTrialForm(); }
+        }
+
+        document.getElementById('trialForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); const btn = document.getElementById('trialSaveBtn'); const editId = document.getElementById('trialEditId').value;
+            btn.innerText = "Saving..."; btn.disabled = true;
+            const data = {
+                name: document.getElementById('trialName').value, father: document.getElementById('trialFather').value,
+                mobile: document.getElementById('trialMobile').value, address: document.getElementById('trialAddress').value,
+                gender: document.getElementById('trialGender').value, timeSlot: document.getElementById('trialTime').value,
+                startDate: document.getElementById('trialStart').value, endDate: document.getElementById('trialEnd').value, timestamp: new Date()
+            };
+            try {
+                if(editId) { await updateDoc(doc(db, "trials", editId), data); } else { await addDoc(collection(db, "trials"), data); }
+                clearTrialForm(); toggleTrialView('list');
+            } catch(err) { alert(err.message); }
+            btn.innerText = "Start Trial Period"; btn.disabled = false;
+        });
+
+        function renderTrialList(data) {
+            const list = document.getElementById('trialList'); list.innerHTML = "";
+            const today = new Date().toISOString().split('T')[0];
+            if(data.length === 0) { list.innerHTML = `<div class="text-center text-slate-400 font-bold py-10">No active trials.</div>`; return; }
+            
+            data.forEach(d => {
+                const isExpired = d.endDate < today;
+                const card = document.createElement('div');
+                card.className = `${isExpired ? 'bg-red-50 border-red-100' : 'bg-white border-slate-200'} p-5 rounded-3xl border shadow-sm relative`;
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <h3 class="font-black text-slate-800 text-lg leading-tight">${d.name}</h3>
+                            <p class="text-xs font-bold text-slate-500 mt-1"><i class="fa-solid fa-phone text-[10px] opacity-70 mr-1"></i> ${d.mobile}</p>
+                        </div>
+                        ${isExpired ? `<span class="bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg border border-red-200 shadow-sm">EXPIRED</span>` : `<span class="bg-green-100 text-green-600 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg border border-green-200 shadow-sm">ACTIVE</span>`}
+                    </div>
+                    <div class="flex gap-2 text-[10px] text-slate-600 font-bold uppercase tracking-wider mb-4 border-y border-slate-200/50 py-2">
+                        <span>End: ${formatDateStr(d.endDate)}</span> | <span>Slot: ${d.timeSlot || 'Any Time'}</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="editTrial('${d.id}')" class="bg-blue-50 text-blue-600 rounded-xl py-2 hover:bg-blue-100 transition border border-blue-100 text-xs font-bold"><i class="fa-solid fa-pen"></i> Edit</button>
+                        <button onclick="sendTrialReminder('${d.name}', '${d.mobile}')" class="bg-green-500 text-white rounded-xl py-2 text-xs font-bold hover:bg-green-600 transition shadow-sm border border-green-600"><i class="fa-brands fa-whatsapp"></i> Remind</button>
+                        <button onclick="deleteTrial('${d.id}')" class="bg-slate-100 text-slate-500 border border-slate-200 rounded-xl hover:text-red-500 hover:bg-red-50 transition text-xs font-bold"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+        window.filterTrials = () => { const term = document.getElementById('trialSearchInput').value.toLowerCase(); renderTrialList(window.globalTrials.filter(s => s.name.toLowerCase().includes(term) || s.mobile.includes(term))); }
+        window.editTrial = (id) => {
+            const s = window.globalTrials.find(st => st.id === id); if(!s) return;
+            document.getElementById('trialEditId').value = id; document.getElementById('trialName').value = s.name; document.getElementById('trialFather').value = s.father; document.getElementById('trialMobile').value = s.mobile; document.getElementById('trialAddress').value = s.address; document.getElementById('trialGender').value = s.gender; document.getElementById('trialTime').value = s.timeSlot; document.getElementById('trialStart').value = s.startDate; document.getElementById('trialEnd').value = s.endDate;
+            document.getElementById('trialSaveBtn').innerText = "Update Trial Record"; document.getElementById('trialFormTitle').innerText = "Edit Student"; toggleTrialView('form');
+        }
+        window.sendTrialReminder = (name, mobile) => {
+            const msg = `Dear ${name}, your trial period at Safal Library has ended. We hope you had a productive time! 📚 To continue your seat, please complete your fee payment.\n\nप्रिय ${name}, सफल लाइब्रेरी में आपका ट्रायल समाप्त हो गया है। अपनी सीट और पढ़ाई जारी रखने के लिए कृपया फीस जमा करें। धन्यवाद! 🙏`;
+            window.open(`https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+        window.deleteTrial = async (id) => { if(confirm("Delete this record permanently?")) await deleteDoc(doc(db, "trials", id)); }
+        function clearTrialForm() {
+            document.getElementById('trialForm').reset(); document.getElementById('trialEditId').value = ""; document.getElementById('trialSaveBtn').innerText = "Start Trial Period"; document.getElementById('trialFormTitle').innerText = "Add Trial Student"; document.getElementById('trialStart').valueAsDate = new Date();
+            const end = new Date(); end.setDate(end.getDate() + 3); document.getElementById('trialEnd').value = end.toISOString().split('T')[0];
+        }
+
+
+        // ==========================================
+        // 7. FEE RECEIPT MODULE LOGIC
+        // ==========================================
+        const recToday = new Date();
+        document.getElementById('recDate').value = recToday.toISOString().split('T')[0];
+        document.getElementById('recStartDate').value = new Date(recToday.getFullYear(), recToday.getMonth(), 1).toISOString().split('T')[0];
+        document.getElementById('recEndDate').value = new Date(recToday.getFullYear(), recToday.getMonth() + 1, 0).toISOString().split('T')[0];
+        document.getElementById('recReceiptNo').value = `SL${recToday.getFullYear()}${(recToday.getMonth()+1).toString().padStart(2,'0')}${Math.floor(100 + Math.random() * 900)}`;
+
+        const recSearch = document.getElementById('recSearch');
+        const recResBox = document.getElementById('recSearchResults');
+        recSearch.addEventListener('keyup', (e) => {
+            const term = e.target.value.toLowerCase(); recResBox.innerHTML = '';
+            if (term.length < 1) { recResBox.classList.add('hidden'); return; }
+            const filtered = window.globalStudents.filter(s => (s.name && s.name.toLowerCase().includes(term)) || (s.regNo && s.regNo.toLowerCase().includes(term)) || (s.mobile && s.mobile.includes(term)));
+            if (filtered.length > 0) {
+                recResBox.classList.remove('hidden');
+                filtered.slice(0, 5).forEach(s => {
+                    const div = document.createElement('div'); div.className = 'search-item flex justify-between items-center';
+                    div.innerHTML = `<div><span class="font-bold text-sm text-slate-700">${s.name}</span><p class="text-[10px] font-bold text-slate-400">${s.mobile}</p></div><span class="text-[10px] tracking-widest bg-blue-100 text-blue-700 px-2 rounded border border-blue-200 font-bold">#${s.regNo}</span>`;
+                    div.onclick = () => {
+                        document.getElementById('recName').value = s.name; document.getElementById('recRegNo').value = s.regNo; document.getElementById('recMobile').value = s.mobile;
+                        recSearch.value = ""; recResBox.classList.add('hidden'); window.updateRecPreview();
+                    };
+                    recResBox.appendChild(div);
+                });
+            } else { recResBox.classList.add('hidden'); }
+        });
+
+        window.updateRecPreview = function() {
+            document.getElementById('prevRecId').innerText = document.getElementById('recReceiptNo').value;
+            document.getElementById('prevRecDate').innerText = formatDateStr(document.getElementById('recDate').value);
+            document.getElementById('prevRecName').innerText = document.getElementById('recName').value || "Student Name";
+            document.getElementById('prevRecReg').innerText = document.getElementById('recRegNo').value || "---";
+            document.getElementById('prevRecMode').innerText = document.getElementById('recMode').value;
+            document.getElementById('prevRecAmount').innerText = document.getElementById('recAmount').value || "0";
+            document.getElementById('prevRecPeriod').innerText = `${formatDateStr(document.getElementById('recStartDate').value)}  to  ${formatDateStr(document.getElementById('recEndDate').value)}`;
+        }
+        window.updateRecPreview(); // Init
+
+        function generateRecPDF(callback) {
+            const element = document.getElementById('receiptCanvas');
+            html2canvas(element, { scale: 3 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png'); const doc = new window.jspdf.jsPDF('p', 'mm', 'a4');
+                const pdfWidth = 210; const imgWidth = 140; const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                doc.addImage(imgData, 'PNG', (pdfWidth - imgWidth) / 2, 20, imgWidth, imgHeight);
+                callback(doc);
+            });
+        }
+        window.downloadRecPDF = function() {
+            const btn = event.currentTarget; const originalText = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`; btn.disabled = true;
+            generateRecPDF((doc) => {
+                doc.save(`Receipt_${document.getElementById('recName').value || "Student"}.pdf`);
+                btn.innerHTML = originalText; btn.disabled = false;
+            });
+        }
+        window.shareRecWhatsApp = function() {
+            const mobile = document.getElementById('recMobile').value;
+            if (!mobile) { alert("Enter Mobile Number first."); return; }
+            window.downloadRecPDF(); // Save file first
+            const msg = `*Fee Receipt - Safal Library* 🧾%0A%0AHi ${document.getElementById('recName').value},%0AWe have received *₹${document.getElementById('recAmount').value}*.%0A%0A*Period:* ${formatDateStr(document.getElementById('recStartDate').value)} to ${formatDateStr(document.getElementById('recEndDate').value)}%0A%0APlease see the PDF receipt attached.%0A%0AThanks,%0ASafal Library`;
+            setTimeout(() => { window.open(`https://wa.me/91${mobile}?text=${msg}`, '_blank'); }, 1500);
+        }
+
+
+        // ==========================================
+        // 8. AD MAKER MODULE LOGIC
+        // ==========================================
+        window.resizeAdCanvas = function() {
+            const wrapper = document.getElementById('adScaleWrapper'); const canvas = document.getElementById('adCanvas');
+            if(!wrapper) return;
+            const scale = wrapper.clientWidth / 1000; canvas.style.transform = `scale(${scale})`; wrapper.style.height = `${wrapper.clientWidth}px`; 
+        }
+        window.addEventListener('resize', resizeAdCanvas);
+
+        window.updateAdPreview = function() {
+            document.getElementById('prevAdHeadline').innerHTML = document.getElementById('adHeadline').value.replace(/\./g, '.<br><span class="text-blue-400">').replace(/!/g, '!</span>');
+            const badgeText = document.getElementById('adBadge').value;
+            const badgeEl = document.getElementById('prevAdBadge');
+            if(badgeText.trim() === "") { badgeEl.style.display = 'none'; } else { badgeEl.style.display = 'block'; badgeEl.innerText = badgeText; }
+            document.getElementById('prevAdPhone').innerText = document.getElementById('adPhone').value;
+            document.getElementById('prevAdPrice').innerText = document.getElementById('adPrice').value;
+            
+            const feats = document.getElementById('adFeatures').value.split(',').map(f => f.trim()).filter(f => f !== "");
+            const fContainer = document.getElementById('prevAdFeatures'); fContainer.innerHTML = '';
+            feats.slice(0, 5).forEach(f => { fContainer.innerHTML += `<li class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm shadow-md"><i class="fa-solid fa-check"></i></div>${f}</li>`; });
+        }
+
+        window.updateAdBg = function(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader(); reader.onload = function(e) { document.getElementById('adCanvas').style.backgroundImage = `url('${e.target.result}')`; }; reader.readAsDataURL(file);
+        };
+
+        const adLibraryImages = [
+            "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1497635580535-7330fd3c0533?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1558021212-51b6ecfa0db9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1568667256549-094345857637?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+            "https://images.unsplash.com/photo-1532012197267-da84d127e765?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80"
+        ];
+        window.autoGenAdBg = async function() {
+            const btn = event.currentTarget; const orig = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`; btn.disabled = true;
+            try {
+                const response = await fetch(adLibraryImages[Math.floor(Math.random() * adLibraryImages.length)]);
+                const blob = await response.blob(); const reader = new FileReader();
+                reader.onloadend = function() { document.getElementById('adCanvas').style.backgroundImage = `url('${reader.result}')`; btn.innerHTML = orig; btn.disabled = false; }
+                reader.readAsDataURL(blob);
+            } catch (error) { btn.innerHTML = orig; btn.disabled = false; }
+        };
+        
+        // Init Ad Maker
+        document.getElementById('adCanvas').style.backgroundImage = `linear-gradient(45deg, #1e293b, #334155)`;
+        updateAdPreview(); autoGenAdBg(); setTimeout(resizeAdCanvas, 500);
+
+        window.downloadAdImage = function() {
+            const canvasElement = document.getElementById('adCanvas'); const btn = event.currentTarget; const orig = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generating...`; btn.disabled = true;
+            canvasElement.style.transform = 'scale(1)'; // Reset scale for crisp render
+            html2canvas(canvasElement, { scale: 2, useCORS: true, backgroundColor: '#1e293b' }).then(canvas => {
+                resizeAdCanvas(); // Restore
+                const link = document.createElement('a'); link.download = `Safal_Promo_${Date.now()}.png`;
+                link.href = canvas.toDataURL("image/png"); link.click();
+                btn.innerHTML = orig; btn.disabled = false;
+            });
+        };
+
+
+        // ==========================================
+        // 9. INCIDENT REPORT (WARNING) LOGIC
+        // ==========================================
+        const warnToday = new Date();
+        document.getElementById('prevWarnDate').innerText = warnToday.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        document.getElementById('prevWarnID').innerText = `REP-${warnToday.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        const warnSearch = document.getElementById('warnSearch');
+        const warnResBox = document.getElementById('warnSearchResults');
+        warnSearch.addEventListener('keyup', (e) => {
+            const term = e.target.value.toLowerCase(); warnResBox.innerHTML = '';
+            if (term.length < 1) { warnResBox.classList.add('hidden'); return; }
+            const filtered = window.globalStudents.filter(s => (s.name && s.name.toLowerCase().includes(term)) || (s.regNo && s.regNo.toLowerCase().includes(term)) || (s.mobile && s.mobile.includes(term)));
+            if (filtered.length > 0) {
+                warnResBox.classList.remove('hidden');
+                filtered.slice(0, 5).forEach(s => {
+                    const div = document.createElement('div'); div.className = 'search-item flex justify-between items-center';
+                    div.innerHTML = `<div><span class="font-bold text-sm text-slate-700">${s.name}</span><p class="text-[10px] text-slate-400 font-bold">${s.mobile || 'No Mobile'}</p></div><span class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded font-black tracking-widest border border-red-200">#${s.regNo}</span>`;
+                    div.onclick = () => {
+                        document.getElementById('warnName').value = s.name; document.getElementById('warnRegNo').value = s.regNo; document.getElementById('warnMobile').value = s.mobile || '';
+                        warnSearch.value = ""; warnResBox.classList.add('hidden'); window.updateWarnPreview();
+                    };
+                    warnResBox.appendChild(div);
+                });
+            } else { warnResBox.classList.add('hidden'); }
+        });
+
+        window.updateWarnPreview = function() {
+            document.getElementById('prevWarnName').innerText = document.getElementById('warnName').value || "Student Name";
+            document.getElementById('prevWarnReg').innerText = document.getElementById('warnRegNo').value || "---";
+            document.getElementById('prevWarnType').innerText = document.getElementById('warnType').value;
+            const desc = document.getElementById('warnDesc').value;
+            document.getElementById('prevWarnDesc').innerText = desc ? `"${desc}"` : "No specific details provided.";
+        }
+        window.updateWarnPreview(); // Init
+
+        window.handleWarnImage = function(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('prevWarnImg'); img.src = e.target.result;
+                img.classList.remove('hidden'); document.getElementById('warnNoImgTxt').classList.add('hidden');
+            }
+            reader.readAsDataURL(file);
+        }
+
+        function generateWarnCanvas(callback) {
+            const element = document.getElementById('reportCanvas');
+            html2canvas(element, { scale: 3, useCORS: true }).then(canvas => { callback(canvas); });
+        }
+
+        window.downloadWarnImage = function() {
+            const btn = event.currentTarget; const originalText = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`; btn.disabled = true;
+            generateWarnCanvas((canvas) => {
+                const link = document.createElement('a'); link.download = `Warning_${document.getElementById('warnName').value || "Student"}.png`;
+                link.href = canvas.toDataURL('image/png'); link.click();
+                btn.innerHTML = originalText; btn.disabled = false;
+            });
+        }
+
+        window.shareWarnWhatsApp = function() {
+            const mobile = document.getElementById('warnMobile').value;
+            if (!mobile) { alert("Enter Mobile Number first."); return; }
+            window.downloadWarnImage(); // Download first
+            const msg = `*OFFICIAL WARNING NOTICE* 🚨%0A%0A*From:* Safal Library Admin%0A*To:* ${document.getElementById('warnName').value}%0A%0AYou are receiving this formal warning regarding: *${document.getElementById('warnType').value}*.%0A%0APlease check the attached official document for evidence and details.%0A%0A_Note: Repeated violations will result in permanent termination of membership without refund as per library rules._`;
+            setTimeout(() => { window.open(`https://wa.me/91${mobile}?text=${msg}`, '_blank'); alert("Notice saved! Attach the image in the WhatsApp chat."); }, 1500);
+        }
+
+        // Initialize Defaults
+        document.getElementById('admRegDate').valueAsDate = new Date();
+        document.getElementById('trialStart').valueAsDate = new Date();
+        document.getElementById('attDateFilter').valueAsDate = new Date();
+        const nm = new Date(); nm.setDate(nm.getDate() + 30); document.getElementById('admFeeDueDate').value = nm.toISOString().split('T')[0];
+        
+    </script>
+</body>
+</html>
