@@ -79,8 +79,6 @@
     <aside id="sidebar" class="sidebar shadow-xl md:shadow-none transition-transform duration-300">
         <div class="p-6 flex items-center gap-3 border-b border-slate-100 hidden md:flex">
             <img src="logo.png" alt="Safal Logo" class="w-10 h-10 rounded-xl shadow-lg object-cover border border-slate-200">
-                <i class="fa-solid fa-book-open"></i>
-            </div>
             <div>
                 <h1 class="text-lg font-black text-slate-800 leading-tight">Safal OS</h1>
                 <p class="text-[10px] text-green-600 font-bold uppercase tracking-wider"><i class="fa-solid fa-circle text-[6px]"></i> Online</p>
@@ -95,6 +93,8 @@
             
             <p class="px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Finance & Tools</p>
             <button onclick="switchGlobalModule('module-receipt')" id="nav-module-receipt" class="nav-btn"><i class="fa-solid fa-file-invoice-dollar w-5 text-center"></i> Fee Receipt</button>
+            <button onclick="switchGlobalModule('module-ledger')" id="nav-module-ledger" class="nav-btn"><i class="fa-solid fa-book-journal-whills w-5 text-center"></i> Ledger</button>
+            
             <button onclick="switchGlobalModule('module-warning')" id="nav-module-warning" class="nav-btn text-red-600 hover:text-red-700 hover:bg-red-50"><i class="fa-solid fa-triangle-exclamation w-5 text-center"></i> Incident Report</button>
             <button onclick="switchGlobalModule('module-admaker')" id="nav-module-admaker" class="nav-btn text-purple-600 hover:text-purple-700 hover:bg-purple-50"><i class="fa-solid fa-wand-magic-sparkles w-5 text-center"></i> Ad Maker</button>
         </nav>
@@ -573,6 +573,58 @@
             </div>
         </div>
 
+        <div id="module-ledger" class="app-module p-4 md:p-8">
+            <div class="max-w-5xl mx-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-800">Financial Ledger</h2>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Payment History</p>
+                    </div>
+                    <button onclick="loadLedger()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-black transition">
+                        <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+                    </button>
+                </div>
+                
+                <div class="mb-6">
+                    <div class="hidden bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Revenue</p>
+                        <p class="text-3xl font-black text-green-600 mt-1">₹<span id="ledgerTotalRev">0</span></p>
+                    </div>
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Transactions</p>
+                        <p class="text-3xl font-black text-blue-600 mt-1" id="ledgerTotalTrans">0</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 bg-slate-50">
+                        <div class="relative">
+                            <i class="fa-solid fa-search absolute left-3 top-3.5 text-slate-400"></i>
+                            <input type="text" id="ledgerSearch" onkeyup="filterLedger()" placeholder="Search payments by Name or Reg No..." class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 font-bold">
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-[10px] uppercase tracking-widest text-slate-500">
+                                    <th class="p-4">Date</th>
+                                    <th class="p-4">Receipt No</th>
+                                    <th class="p-4">Student</th>
+                                    <th class="p-4">Amount</th>
+                                    <th class="p-4">Mode</th>
+                                    <th class="p-4">Valid Period</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ledgerTableBody" class="text-sm">
+                                </tbody>
+                        </table>
+                    </div>
+                    <div id="ledgerEmpty" class="hidden text-center py-10 text-slate-400 font-bold border-t border-slate-100">No payments found.</div>
+                </div>
+            </div>
+        </div>
+
+
         <div id="module-admaker" class="app-module p-4 md:p-8">
             <div class="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8">
                 <div class="w-full lg:w-1/3 bg-white p-6 rounded-3xl shadow-sm border border-slate-200 h-fit">
@@ -919,6 +971,7 @@
             // Module specific triggers on open
             if(moduleId === 'module-attendance') fetchAttendanceLog();
             if(moduleId === 'module-admaker') resizeAdCanvas();
+            if(moduleId === 'module-ledger') window.loadLedger();
         }
 
         // Setup Shared Seat Dropdown Options
@@ -1514,20 +1567,107 @@
                 callback(doc);
             });
         }
-        window.downloadRecPDF = function() {
-            const btn = event.currentTarget; const originalText = btn.innerHTML;
-            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`; btn.disabled = true;
+        
+        window.downloadRecPDF = async function() {
+            const btn = event.currentTarget; 
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`; 
+            btn.disabled = true;
+
+            // --- ADDED THIS TO SAVE TO DATABASE ---
+            try {
+                await addDoc(collection(db, "payments"), {
+                    receiptNo: document.getElementById('recReceiptNo').value,
+                    regNo: document.getElementById('recRegNo').value,
+                    name: document.getElementById('recName').value,
+                    amount: document.getElementById('recAmount').value,
+                    date: document.getElementById('recDate').value,
+                    startDate: document.getElementById('recStartDate').value,
+                    endDate: document.getElementById('recEndDate').value,
+                    mode: document.getElementById('recMode').value,
+                    timestamp: new Date()
+                });
+            } catch(err) {
+                console.error("Failed to save to database:", err);
+            }
+            // ---------------------------------------
+
             generateRecPDF((doc) => {
                 doc.save(`Receipt_${document.getElementById('recName').value || "Student"}.pdf`);
-                btn.innerHTML = originalText; btn.disabled = false;
+                btn.innerHTML = originalText; 
+                btn.disabled = false;
             });
         }
+
         window.shareRecWhatsApp = function() {
             const mobile = document.getElementById('recMobile').value;
             if (!mobile) { alert("Enter Mobile Number first."); return; }
             window.downloadRecPDF(); // Save file first
             const msg = `*Fee Receipt - Safal Library* 🧾%0A%0AHi ${document.getElementById('recName').value},%0AWe have received *₹${document.getElementById('recAmount').value}*.%0A%0A*Period:* ${formatDateStr(document.getElementById('recStartDate').value)} to ${formatDateStr(document.getElementById('recEndDate').value)}%0A%0APlease see the PDF receipt attached.%0A%0AThanks,%0ASafal Library`;
             setTimeout(() => { window.open(`https://wa.me/91${mobile}?text=${msg}`, '_blank'); }, 1500);
+        }
+
+        // ==========================================
+        // 7.5 LEDGER (PAYMENT HISTORY) LOGIC
+        // ==========================================
+        let allPayments = [];
+        window.loadLedger = async function() {
+            const tbody = document.getElementById('ledgerTableBody');
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-10"><div class="loader"></div></td></tr>`;
+            document.getElementById('ledgerEmpty').classList.add('hidden');
+            
+            try {
+                const snap = await getDocs(query(collection(db, "payments"), orderBy("timestamp", "desc")));
+                allPayments = [];
+                let totalRev = 0;
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    allPayments.push({ id: doc.id, ...data });
+                    totalRev += Number(data.amount) || 0;
+                });
+                
+                document.getElementById('ledgerTotalRev').innerText = totalRev.toLocaleString('en-IN');
+                document.getElementById('ledgerTotalTrans').innerText = allPayments.length;
+                
+                renderLedger(allPayments);
+            } catch (e) {
+                console.error("Error loading ledger:", e);
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-red-500 font-bold">Failed to load data.</td></tr>`;
+            }
+        }
+
+        function renderLedger(payments) {
+            const tbody = document.getElementById('ledgerTableBody');
+            tbody.innerHTML = '';
+            if(payments.length === 0) {
+                document.getElementById('ledgerEmpty').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('ledgerEmpty').classList.add('hidden');
+            
+            payments.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-50 hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="p-4 font-bold text-slate-600 whitespace-nowrap">${formatDateStr(p.date)}</td>
+                    <td class="p-4 font-mono text-xs text-slate-400 whitespace-nowrap">${p.receiptNo || '---'}</td>
+                    <td class="p-4 font-bold text-slate-800">${p.name} <span class="text-[10px] text-blue-500 bg-blue-50 px-2 rounded ml-1">#${p.regNo || '---'}</span></td>
+                    <td class="p-4 font-black text-green-600 whitespace-nowrap">₹${p.amount}</td>
+                    <td class="p-4"><span class="text-[10px] font-bold uppercase tracking-widest bg-slate-200 text-slate-600 px-2 py-1 rounded whitespace-nowrap">${p.mode || 'Cash'}</span></td>
+                    <td class="p-4 text-xs text-slate-500 font-medium whitespace-nowrap">${formatDateStr(p.startDate)} - ${formatDateStr(p.endDate)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.filterLedger = function() {
+            const term = document.getElementById('ledgerSearch').value.toLowerCase();
+            const filtered = allPayments.filter(p => 
+                (p.name && p.name.toLowerCase().includes(term)) || 
+                (p.regNo && p.regNo.toLowerCase().includes(term)) ||
+                (p.receiptNo && p.receiptNo.toLowerCase().includes(term))
+            );
+            renderLedger(filtered);
         }
 
 
